@@ -1,0 +1,71 @@
+#!/bin/bash
+
+show_help() {
+    echo "Usage: $0 [-o outputfilename] [-h]"
+    echo
+    echo "Options:"
+    echo "  -o outputfilename   Save output to the specified file"
+    echo "  -h              Show this help message and exit"
+    echo
+    echo "The script checks each website in a user-specified file for the HSTS header."
+    echo "If -o is used, the output will be saved to the file and also displayed on screen."
+    echo "Enjoy - William P."
+}
+
+output_file=""
+
+# Parse command line flags
+while getopts ":o:h" opt; do
+  case $opt in
+    o)
+      output_file="$OPTARG"
+      ;;
+    h)
+      show_help
+      exit 0
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      show_help
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      show_help
+      exit 1
+      ;;
+  esac
+done
+
+shift $((OPTIND -1))
+
+read -p "Enter the filename containing the list of websites: " website_file
+
+if [ ! -f "$website_file" ]; then
+    echo "File not found: $website_file"
+    exit 1
+fi
+
+run_checks() {
+    while read -r site; do
+        url="https://${site}"
+        headers=$(curl -s -D - "$url" -o /dev/null)
+        if echo "$headers" | grep -iq "Strict-Transport-Security"; then
+            echo "$site: HSTS header found"
+        else
+            echo "$site: HSTS header NOT found"
+            echo "Sample response headers from $site:"
+            echo "$headers" | head -n 5
+            echo "..."
+        fi
+        echo
+    done < "$website_file"
+}
+
+if [ -n "$output_file" ]; then
+    echo "Saving output to $output_file"
+    echo
+    run_checks | tee "$output_file"
+else
+    run_checks
+fi
